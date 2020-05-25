@@ -1,0 +1,320 @@
+<!--
+ index.html for a Romi chassis on ESP32
+
+ This is an example of use of an HTTP server and a Web Socket server
+ for controlling a Romi chassis by Pololu.
+ This file should be put in the /www directory on the ESP32 for
+ use with romimain.py.
+
+ © Frédéric Boulanger <frederic.softdev@gmail.com>
+ 2020-05-10 –– 2020-05-19
+ This software is licensed under the Eclipse Public License 2.0
+-->
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8" />
+	<title>Romi platform websocket server</title>
+</head>
+
+<script language="javascript">
+  var webSocket;          // The websocket for interacting with the ESP32
+  var refreshinterval;    // Time in ms between two requests to refresh the status of the board
+  var debugMsg = false;   // Display data exchanged with the web socket server
+	
+  // Update the status of the platform
+	function updateInfo(infos) {
+		var led = infos[0];
+		if (parseInt(led) > 0) {
+			document.getElementById("led").setAttribute("fill", "blue");
+		} else {
+			document.getElementById("led").setAttribute("fill", "none");
+		}
+		
+		var leftA = infos[1];
+		document.getElementById("leftA").innerHTML = leftA;
+		var leftSpd = infos[2];
+		document.getElementById("leftSpd").innerHTML = leftSpd;
+
+		var rightA = infos[3];
+		document.getElementById("rightA").innerHTML = rightA;
+		var rightSpd = infos[4];
+		document.getElementById("rightSpd").innerHTML = rightSpd;
+		
+		var leftthrot = infos[5];
+		document.getElementById("lthrottle").value = leftthrot;
+		document.getElementById("lthrotvalue").value = leftthrot;
+		var rightthrot = infos[6];
+		document.getElementById("rthrottle").value = rightthrot;
+		document.getElementById("rthrotvalue").value = rightthrot;
+	}
+	
+  // Send a message to the websocket server
+  function sendMessage(str) {
+    webSocket.send(str);
+    webSocket.send("\n");
+    if (debugMsg) {
+      var term = document.getElementById("transcript");
+      term.innerHTML = term.innerHTML + '<span style="color: blue;">' + str + '<br/></span>' ;
+    }
+  }
+  
+  // Force a refresh of the status of the board by sending 
+  // the "STAT" command to the web socket server.
+  function refresh() {
+    sendMessage("STAT");
+  }
+  
+  // Executed when the connection to the web socket server opens
+  function onOpen(evt) {
+    // The connection is open, but we still have to give the right password,
+    // so the connection is only orange, not green.
+    document.getElementById("connection").setAttribute("fill", "orange");
+  }
+  
+  // Executed when the connection to the web socket server is closed
+  function onClose(evt) {
+    document.getElementById("connection").setAttribute("fill", "red");
+    document.getElementById("conn_btn").disabled = false;
+    document.getElementById("disconn_btn").disabled = true;
+    // Stop asking for updates of the status of the board
+    clearInterval(refreshinterval);
+  }
+  
+  // Executed when a message is received from the web socket server
+  function onMessage(evt) {
+    if (debugMsg) {
+      var term = document.getElementById("transcript");
+      term.innerHTML = term.innerHTML + '<span style="color: green;">'
+                                      + evt.data.replace(/\r|\n/g, '<br/>')
+                                      + '</span>';
+    }
+    var args = evt.data.trim().split(" ");
+    switch (args[0]) {
+      case "UPDATE":               // Update the display of the status of the board
+        updateInfo(args.slice(1));
+        break;
+      case "WebREPL":              // We are really connected to the server
+        document.getElementById("connection").setAttribute("fill", "green");
+        document.getElementById("conn_btn").disabled = true;
+        document.getElementById("disconn_btn").disabled = false;
+        refreshinterval = setInterval(refresh, 1000); // refresh data every 1s
+        refresh();
+        break;
+      case "Password:":            // Password prompt
+        sendMessage("");           // Here, we use an empty password
+        break;
+      default:                     // Useful for debugging, but other messages could be ignored
+        window.alert("Unknown command: '" + args + "'");
+    }
+  }
+  
+  // Executed when an error occurs in the connection to the web socket server
+  function onError(evt) {
+    window.alert("Error: " + evt.data);
+  }
+  
+  // Connect to the web socket server
+  function connect() {
+    webSocket = new WebSocket(getWSurl());
+    // Install the callback functions
+    webSocket.onopen = onOpen;
+    webSocket.onclose = onClose;
+    webSocket.onmessage = onMessage;
+    webSocket.onerror = onError;
+  }
+
+  // Close the connection to the web socket server by sending Ctrl-C
+  function disconnect() {
+    sendMessage("\x03");  // Ctrl-C ends the connection to the server
+  }
+
+  // Ask the server to switch on the builtin LED of the board
+  function ledOn() {
+    sendMessage("LED_ON");
+  };
+  
+  // Ask the server to switch off the builtin LED of the board
+  function ledOff() {
+    sendMessage("LED_OFF");
+  };
+  
+  // Build the URL of the websocket server, which is on port 8080 on the same host as the HTTP server
+  function getWSurl() {
+    return "ws://" + window.location.hostname + ":8080" ;
+  };
+
+  // Initialize the page. Here, we just display the URL of the web socket server.
+  function init() {
+    document.getElementById("websock_url").innerHTML = getWSurl() ;
+  };
+	
+  // Ask the server to switch on the builtin LED of the board
+	function ledOn() {
+		sendMessage("LED_ON");
+	};
+	
+  // Ask the server to switch off the builtin LED of the board
+	function ledOff() {
+		sendMessage("LED_OFF");
+	};
+	
+	// Ask the server to make the chassis advance by a given number of turns of the wheels
+	function advance() {
+		sendMessage("MOVE " + document.getElementById("leftAdvance").value + " "
+												+ document.getElementById("rightAdvance").value);
+	}
+	
+	// Ask the server to make the chassis cruise at the specified RPMs
+	function cruise() {
+		sendMessage("CRUISE " + document.getElementById("leftCruise").value + " "
+													+ document.getElementById("rightCruise").value);
+	}
+	
+	// Ask the server to make the chassis stop
+	function stop() {
+		sendMessage("STOP");
+	}
+	
+	// Ask the server to shutdown the power on the chassis
+	function emergency() {
+		sendMessage("SHUTDOWN");
+	}
+	
+	function setLthrottle(lthr) {
+	  document.getElementById("lthrotvalue").value = lthr
+	  sendMessage("LTHROT "+ lthr)
+	}
+
+	function setRthrottle(rthr) {
+	  document.getElementById("rthrotvalue").value = rthr
+	  sendMessage("RTHROT "+ rthr)
+	}
+
+	window.addEventListener("load", init, false);
+</script>
+
+<body>
+
+<div style="display:inline-block; width:70pt; vertical-align:middle;">
+<!--
+This section displays the status of the builtin LED, with two buttons for switching it on or off
+-->
+<p align="middle">
+<svg height="24" width="70" style="vertical-align:bottom;">
+	<circle id="led" cx="12" cy="12" r="10" fill="grey" stroke="black" stroke-width="2"/>
+	<text x="27", y="12" font-family="Sans-Serif" font-size="20" dominant-baseline="middle">LED</text>
+</svg>
+<br/>
+<button onclick="ledOn()">on</button>
+<button onclick="ledOff()">off</button>
+</p>
+</div>
+
+<div style="display: inline-block; border:solid black 1pt; vertical-align:middle;">
+<!--
+This section displays the emergency stop button.
+-->
+<svg height="80" width="80" style="vertical-align:bottom;">
+	<rect x="0" y="0" width="80" height="80"
+	      fill="orange" stroke="grey" stroke-width="1"/>
+	<circle cx="40" cy="40" r="30"
+	        fill="red" stroke="white" stroke-width="2"
+	        onclick="ledOff()"/>
+	<circle cx="40" cy="40" r="25"
+	        fill="none" stroke="white" stroke-width="2"/>
+	<text x="40" y="40" font-family="Sans-Serif" font-size="14"
+	      text-anchor="middle" dominant-baseline="middle" onclick="emergency()">
+	  STOP
+	</text>
+</svg>
+</div>
+
+<div style="display: inline-block; vertical-align:middle;">
+<!--
+This section displays the status of the connection, with two buttons for connecting and deconnecting
+-->
+<p>
+<svg height="24" width="24" style="vertical-align:bottom;">
+  <circle id="connection" cx="12" cy="12" r="12"
+          fill="red" stroke="white" stroke-width="2"/>
+  </text>
+</svg>
+<span id="websock_url" style="font-family: Sans-Serif;">unknown</span>
+<br/>
+<button id="conn_btn" onclick="connect()">connect</button>
+<button id="disconn_btn" onclick="disconnect()" disabled>disconnect</button>
+</p>
+</div>
+
+<br/>
+
+<div style="display: inline-block; vertical-align:middle;">
+<!--
+This section displays a view of the Romi platform
+-->
+<svg height="200" width="200" style="vertical-align:bottom;">
+	<circle cx="100" cy="100" r="90"
+	        fill="black" stroke="none"/>
+	<rect x="5" y="50" width="10" height="100"
+	      fill="grey" stroke="white" stroke-width="1"/>
+	<rect x="185" y="50" width="10" height="100"
+	      fill="grey" stroke="white" stroke-width="1"/>
+	<circle cx="100" cy="160" r="20"
+	        fill="grey" stroke="white" stroke-width="1"/>
+	<foreignObject x="30" y="80" width="60" height="16" dominant-baseline="middle">
+		<span id="leftA" style="font-family:Sans-Serif; font-size: 11pt; background-color: white; display: inline-block; width:45pt; text-align: right">
+			0
+		</span>
+	</foreignObject>
+	<foreignObject x="30" y="100" width="60" height="16" dominant-baseline="middle">
+		<span id="leftSpd" style="font-family:Sans-Serif; font-size: 11pt; background-color: white; display: inline-block; width:45pt; text-align: right">
+			0
+		</span>
+	</foreignObject>
+
+	<foreignObject x="110" y="80" width="60" height="16" dominant-baseline="middle">
+		<span id="rightA" style="font-family:Sans-Serif; font-size: 11pt; background-color: white; display: inline-block; width:45pt; text-align: left">
+			0
+		</span>
+	</foreignObject>
+	<foreignObject x="110" y="100" width="60" height="16" text-anchor="middle" dominant-baseline="middle">
+		<span id="rightSpd" style="font-family:Sans-Serif; font-size: 11pt; background-color: white; display: inline-block; width:45pt; text-align: left">
+			0
+		</span>
+	</foreignObject>
+</svg>
+</div>
+
+<div style="display: inline-block; vertical-align:middle; font-family: Sans-Serif; font-size: 10pt; padding-left: 10pt;">
+<!--
+This section displays the controls of the Romi platform
+-->
+  L:<input type="number" id="leftAdvance" size="10" value="1"/> R:<input type="number" id="rightAdvance" size="10" value="1"/>
+  <button onclick="advance()">Move</button>
+  <br/>
+  L:<input type="number" id="leftCruise" size="10" value="4"/> R:<input type="number" id="rightCruise" size="10" value="4"/>
+  <button onclick="cruise()">Cruise</button>
+  <br/>
+  <button onclick="stop()">Stop</button>
+</div>
+
+<div style="display: block; font-family: Sans-Serif; font-size: 10pt; padding-left: 10pt;">
+<!--
+This section displays the throttle controls
+-->
+<output for="lthrottle" id="lthrotvalue">0</output>
+<input id="lthrottle" type="range" min="-100" max="100" value="0" step="1" style="width: 200px; height: 20px; margin: 0; transform-origin: 100px 100px; transform: rotate(-90deg);" onchange="setLthrottle(value)"/>
+<output for="rthrottle" id="rthrotvalue">0</output>
+<input id="rthrottle" type="range" min="-100" max="100" value="0" step="1" style="width: 200px; height: 20px; margin: 0; transform-origin: 100px 100px; transform: rotate(-90deg);" onchange="setRthrottle(value)"/>
+</div>
+
+<!--
+This section is used to display the data exchanged with the server when debugMsg is true.
+-->
+<div id="transcript" style="overflow:scroll; height:500px; font-family:monospace;">
+</div>
+
+</body>
+
+</html>

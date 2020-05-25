@@ -1,0 +1,2 @@
+import netsetup
+import romimain
