@@ -12,3 +12,13 @@ I experimented with several options to control the chassis remotely through WiFi
 * Using a regular ESP32 (WROOM-32) and relying on the webrepl which is built into MicroPython to control the chassis. This works fine, but the inconvenient is that if you kill the main program (which reads from sys.stdin and writes to sys.stdout), you get into the REPL and get complete control on the ESP32. This is in the [ESP32_webrepl](./ESP32_webrepl/) directory.
 
 * The best solution, that works with a regular ESP32 (no spiRAM required), relies on a very basic HTTP server and on a websocket server that I wrote using the websocket and webrepl stuff that is already built into MicroPython. The corresponding modules are available on [github](https://github.com/Frederic-soft/ESP32/tree/master/microserver). This solution has the low cost advantage of the webrepl solution without exposing the REPL of the board on the web.
+
+Front view: 
+<img src="./VersionESP32_front.png" alt="front view" width="500"/>
+
+Top view: 
+<img src="./VersionESP32_top.png" alt="front view" width="500"/>
+
+Closeup: 
+<img src="./VersionESP32_closeup.png" alt="front view" width="500"/>
+
