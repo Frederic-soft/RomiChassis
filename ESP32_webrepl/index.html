@@ -1,10 +1,11 @@
 <!--
  index.html for a Romi chassis on ESP32
 
- This is an example of use of an HTTP server and a Web Socket server
+ This is an example of use of MicroPython's web REPL
  for controlling a Romi chassis by Pololu.
- This file should be put in the /www directory on the ESP32 for
- use with romimain.py.
+
+ Open this file in your browser to connect to the web REPL socket on an ESP32
+ running romimain.py.
 
  © Frédéric Boulanger <frederic.softdev@gmail.com>
  2020-05-10 –– 2020-05-19
@@ -14,13 +15,13 @@
 <html>
 <head>
 	<meta charset="utf-8" />
-	<title>Romi platform websocket server</title>
+	<title>Web REPL chassis server</title>
 </head>
 
 <script language="javascript">
-  var webSocket;          // The websocket for interacting with the ESP32
-  var refreshinterval;    // Time in ms between two requests to refresh the status of the board
-  var debugMsg = false;   // Display data exchanged with the web socket server
+	var webSocket;
+	var connected = false;
+	var refreshinterval;
 	
   // Update the status of the platform
 	function updateInfo(infos) {
@@ -40,79 +41,63 @@
 		document.getElementById("rightA").innerHTML = rightA;
 		var rightSpd = infos[4];
 		document.getElementById("rightSpd").innerHTML = rightSpd;
-		
-		var leftthrot = infos[5];
-		document.getElementById("lthrottle").value = leftthrot;
-		document.getElementById("lthrotvalue").value = leftthrot;
-		var rightthrot = infos[6];
-		document.getElementById("rthrottle").value = rightthrot;
-		document.getElementById("rthrotvalue").value = rightthrot;
 	}
 	
-  // Send a message to the websocket server
-  function sendMessage(str) {
-    webSocket.send(str);
-    webSocket.send("\n");
-    if (debugMsg) {
-      var term = document.getElementById("transcript");
-      term.innerHTML = term.innerHTML + '<span style="color: blue;">' + str + '<br/></span>' ;
-    }
-  }
-  
   // Force a refresh of the status of the board by sending 
   // the "STAT" command to the web socket server.
-  function refresh() {
-    sendMessage("STAT");
-  }
-  
+	function refresh() {
+		webSocket.send("STAT\n");
+	}
+	
   // Executed when the connection to the web socket server opens
-  function onOpen(evt) {
-    // The connection is open, but we still have to give the right password,
-    // so the connection is only orange, not green.
-    document.getElementById("connection").setAttribute("fill", "orange");
-  }
-  
+	function onOpen(evt) {
+		if (!connected) {
+		  connected = true;
+		  document.getElementById("connection").setAttribute("fill", "orange");
+	  	webSocket.send("\n"); // send empty password
+	  }
+		refreshinterval = setInterval(refresh, 1000); // refresh data every 1s
+		refresh();
+	}
+	
   // Executed when the connection to the web socket server is closed
-  function onClose(evt) {
-    document.getElementById("connection").setAttribute("fill", "red");
+	function onClose(evt) {
+	  document.getElementById("connection").setAttribute("fill", "red");
     document.getElementById("conn_btn").disabled = false;
     document.getElementById("disconn_btn").disabled = true;
-    // Stop asking for updates of the status of the board
-    clearInterval(refreshinterval);
-  }
-  
+	  connected = false;
+	  clearInterval(refreshinterval);
+	}
+	
   // Executed when a message is received from the web socket server
-  function onMessage(evt) {
-    if (debugMsg) {
-      var term = document.getElementById("transcript");
-      term.innerHTML = term.innerHTML + '<span style="color: green;">'
-                                      + evt.data.replace(/\r|\n/g, '<br/>')
-                                      + '</span>';
-    }
-    var args = evt.data.trim().split(" ");
-    switch (args[0]) {
-      case "UPDATE":               // Update the display of the status of the board
-        updateInfo(args.slice(1));
-        break;
-      case "WebREPL":              // We are really connected to the server
-        document.getElementById("connection").setAttribute("fill", "green");
+	function onMessage(evt) {
+		var args = evt.data.trim().split(" ");
+		switch (args[0]) {
+			case "UPDATE":                // Update the display of the status of the board
+				updateInfo(args.slice(1));
+				break;
+			case "NOK":
+				window.alert("Communication error: " + args[0]);
+				break;
+			case "ERR":
+				window.alert("Error: " + evt.data);
+				break;
+			case "WebREPL":               // Web REPL prompt --> we are really connected
+			  document.getElementById("connection").setAttribute("fill", "green");
         document.getElementById("conn_btn").disabled = true;
         document.getElementById("disconn_btn").disabled = false;
-        refreshinterval = setInterval(refresh, 1000); // refresh data every 1s
-        refresh();
-        break;
-      case "Password:":            // Password prompt
-        sendMessage("");           // Here, we use an empty password
-        break;
-      default:                     // Useful for debugging, but other messages could be ignored
-        window.alert("Unknown command: '" + args + "'");
-    }
-  }
-  
-  // Executed when an error occurs in the connection to the web socket server
-  function onError(evt) {
-    window.alert("Error: " + evt.data);
-  }
+			  break;
+// 			case "WS":
+// 			case "OK":
+// 				break;
+// 			case "Password:":
+// 			case "Concurrent":
+// 			case "":
+// 			  break;
+// 			default:
+// 				window.alert("Unknown command: '" + args[0] + "'");
+		}
+	}
   
   // Connect to the web socket server
   function connect() {
@@ -126,62 +111,62 @@
 
   // Close the connection to the web socket server by sending Ctrl-C
   function disconnect() {
-    sendMessage("\x03");  // Ctrl-C ends the connection to the server
+    webSocket.close();
   }
 
-  // Build the URL of the websocket server, which is on port 8080 on the same host as the HTTP server
+  // Get the URL of the websocket server
   function getWSurl() {
-    return "ws://" + window.location.hostname + ":8080" ;
+    return "ws://" + document.getElementById("websock_url").value + ":8080" ;
   };
 
-  // Initialize the page. Here, we just display the URL of the web socket server.
-  function init() {
-    document.getElementById("websock_url").innerHTML = getWSurl() ;
-  };
+	
+  // Executed when an error occurs in the connection to the web socket server
+	function onError(evt) {
+		window.alert("Error: " + evt.data);
+	}
+	
+	// Execute when the page is loaded
+// 	function init() {
+// 		webSocket = new WebSocket("ws://192.168.1.54:8080");
+// 		webSocket.onopen = onOpen;
+// 		webSocket.onclose = onClose;
+// 		webSocket.onmessage = onMessage;
+// 		webSocket.onerror = onError;
+// 	}
 	
   // Ask the server to switch on the builtin LED of the board
 	function ledOn() {
-		sendMessage("LED_ON");
+		webSocket.send("LED_ON\n");
 	};
 	
   // Ask the server to switch off the builtin LED of the board
 	function ledOff() {
-		sendMessage("LED_OFF");
+		webSocket.send("LED_OFF\n");
 	};
 	
 	// Ask the server to make the chassis advance by a given number of turns of the wheels
 	function advance() {
-		sendMessage("MOVE " + document.getElementById("leftAdvance").value + " "
-												+ document.getElementById("rightAdvance").value);
+		webSocket.send("MOVE " + document.getElementById("leftAdvance").value + " "
+													 + document.getElementById("rightAdvance").value +"\n");
 	}
 	
 	// Ask the server to make the chassis cruise at the specified RPMs
 	function cruise() {
-		sendMessage("CRUISE " + document.getElementById("leftCruise").value + " "
-													+ document.getElementById("rightCruise").value);
+		webSocket.send("CRUISE " + document.getElementById("leftCruise").value + " "
+													   + document.getElementById("rightCruise").value + "\n");
 	}
 	
 	// Ask the server to make the chassis stop
 	function stop() {
-		sendMessage("STOP");
+		webSocket.send("STOP\n");
 	}
 	
 	// Ask the server to shutdown the power on the chassis
 	function emergency() {
-		sendMessage("SHUTDOWN");
+		webSocket.send("SHUTDOWN\n");
 	}
 	
-	function setLthrottle(lthr) {
-	  document.getElementById("lthrotvalue").value = lthr
-	  sendMessage("LTHROT "+ lthr)
-	}
-
-	function setRthrottle(rthr) {
-	  document.getElementById("rthrotvalue").value = rthr
-	  sendMessage("RTHROT "+ rthr)
-	}
-
-	window.addEventListener("load", init, false);
+//	window.addEventListener("load", init, false);
 </script>
 
 <body>
@@ -230,7 +215,9 @@ This section displays the status of the connection, with two buttons for connect
           fill="red" stroke="white" stroke-width="2"/>
   </text>
 </svg>
-<span id="websock_url" style="font-family: Sans-Serif;">unknown</span>
+<span style="font-family: Sans-Serif;">ws://</span>
+<input id="websock_url" type="text" size="20" value="192.168.1.33"/>
+<span style="font-family: Sans-Serif;">:8080</span>
 <br/>
 <button id="conn_btn" onclick="connect()">connect</button>
 <button id="disconn_btn" onclick="disconnect()" disabled>disconnect</button>
@@ -288,23 +275,6 @@ This section displays the controls of the Romi platform
   <br/>
   <button onclick="stop()">Stop</button>
 </div>
-
-<div style="display: block; font-family: Sans-Serif; font-size: 10pt; padding-left: 10pt;">
-<!--
-This section displays the throttle controls
--->
-<output for="lthrottle" id="lthrotvalue">0</output>
-<input id="lthrottle" type="range" min="-100" max="100" value="0" step="1" style="width: 200px; height: 20px; margin: 0; transform-origin: 100px 100px; transform: rotate(-90deg);" onchange="setLthrottle(value)"/>
-<output for="rthrottle" id="rthrotvalue">0</output>
-<input id="rthrottle" type="range" min="-100" max="100" value="0" step="1" style="width: 200px; height: 20px; margin: 0; transform-origin: 100px 100px; transform: rotate(-90deg);" onchange="setRthrottle(value)"/>
-</div>
-
-<!--
-This section is used to display the data exchanged with the server when debugMsg is true.
--->
-<div id="transcript" style="overflow:scroll; height:500px; font-family:monospace;">
-</div>
-
 </body>
 
 </html>

@@ -1,5 +1,19 @@
+############
+# romimain.py for Micropython on ESP32
+#
+# HTTP/WebSocket server for driving a Pololu Romi Chassis
+# equipped with the Motor driver and power distribution board.
+#
+# See https://www.pololu.com/category/202/romi-chassis-and-accessories
+#
+# © Frédéric Boulanger <frederic.softdev@gmail.com>
+# 2020-04-10 -- 2020-05-24
+# This software is licensed under the Eclipse Public License 2.0
+############
+# httpserver and wsserver are from https://github.com/Frederic-soft/ESP32/tree/master/microserver
 from httpserver import HttpServer
 from wsserver import WebSocketServer
+
 from machine import Pin
 from romiesp32 import RomiPlatform
 
