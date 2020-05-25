@@ -1,0 +1,236 @@
+<!--
+ index.html for a Romi chassis on ESP32
+
+ This is an example of use of an HTTP server and a Web Socket server
+ for controlling a Romi chassis by Pololu.
+ This file should be put in the /www directory on the ESP32 for
+ use with romimain.py.
+
+ © Frédéric Boulanger <frederic.softdev@gmail.com>
+ 2020-05-10 –– 2020-05-19
+ This software is licensed under the Eclipse Public License 2.0
+-->
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8" />
+	<title>Romi robot chassis</title>
+</head>
+
+<script language="javascript">
+	var webSocket;        // The websocket for interacting with the ESP32
+	var refreshinterval;  // Time in ms between two requests to refresh the status of the board
+	
+  // Update the status of the chassis
+	function updateInfo(infos) {
+		var led = infos[0];
+		if (parseInt(led) > 0) {
+			document.getElementById("led").setAttribute("fill", "blue");
+		} else {
+			document.getElementById("led").setAttribute("fill", "none");
+		}
+		
+		var leftA = infos[1];
+		document.getElementById("leftA").innerHTML=leftA;
+		var leftSpd = infos[2];
+		document.getElementById("leftSpd").innerHTML=leftSpd;
+
+		var rightA = infos[3];
+		document.getElementById("rightA").innerHTML=rightA;
+		var rightSpd = infos[4];
+		document.getElementById("rightSpd").innerHTML=rightSpd;
+	}
+	
+  // Force a refresh of the status of the board by sending 
+  // the "STAT" command to the web socket server.
+	function refresh() {
+		webSocket.send("STAT");
+	}
+	
+  // Executed when the connection to the web socket server opens
+	function onOpen(evt) {
+	  document.getElementById("connection").setAttribute("fill", "green");
+	  document.getElementById("connstatus").textContent = webSocket.url;
+	  refreshinterval = setInterval(refresh, 1000); // refresh data every 1s
+	  refresh();
+	}
+	
+  // Executed when the connection to the web socket server is closed
+	function onClose(evt) {
+	  document.getElementById("connection").setAttribute("fill", "red");
+	  clearInterval(refreshinterval);
+	}
+	
+  // Executed when a message is received from the web socket server
+	function onMessage(evt) {
+		var args = evt.data.trim().split(" ");
+		switch (args[0]) {
+			case "UPDATE":      // Update the display of the status of the board
+				updateInfo(args.slice(1));
+				break;
+			case "OK":
+				break;
+			case "NOK":
+				window.alert("Communication error: " + args[0]);
+				break;
+			case "ERR":
+				window.alert("Error: " + evt.data);
+				break;
+			default:
+				window.alert("Unknown command: '" + args[0] + "'");
+		}
+	}
+	
+  // Executed when an error occurs in the connection to the web socket server
+	function onError(evt) {
+		window.alert("Error: " + evt.data);
+	}
+	
+	// Called when the page is loaded, to create the web socket
+	function init() {
+		webSocket = new WebSocket("ws://" + window.location.hostname);
+		webSocket.onopen = onOpen;
+		webSocket.onclose = onClose;
+		webSocket.onmessage = onMessage;
+		webSocket.onerror = onError;
+	}
+	
+  // Ask the server to switch on the builtin LED of the board
+	function ledOn() {
+		webSocket.send("LED_ON");
+	};
+	
+  // Ask the server to switch off the builtin LED of the board
+	function ledOff() {
+		webSocket.send("LED_OFF");
+	};
+	
+	// Ask the server to make the chassis advance by a given number of turns of the wheels
+	function advance() {
+		webSocket.send("MOVE " + document.getElementById("leftAdvance").value + " "
+													 + document.getElementById("rightAdvance").value);
+	}
+	
+	// Ask the server to make the chassis cruise at the specified RPMs
+	function cruise() {
+		webSocket.send("CRUISE " + document.getElementById("leftCruise").value + " "
+													   + document.getElementById("rightCruise").value);
+	}
+	
+	// Ask the server to make the chassis stop
+	function stop() {
+		webSocket.send("STOP");
+	}
+	
+	// Ask the server to shutdown the power on the chassis
+	function emergency() {
+		webSocket.send("SHUTDOWN");
+	}
+	
+	window.addEventListener("load", init, false);
+</script>
+
+<body>
+
+<div style="display:inline-block; width:70pt; vertical-align:middle;">
+<!--
+This section displays the status of the builtin LED, with two buttons for switching it on or off
+-->
+<p align="middle">
+<svg height="24" width="70" style="vertical-align:bottom;">
+	<circle id="led" cx="12" cy="12" r="10" fill="grey" stroke="black" stroke-width="2"/>
+	<text x="27", y="12" font-family="Sans-Serif" font-size="20" dominant-baseline="middle">LED</text>
+</svg>
+<br/>
+<button onclick="ledOn()">on</button>
+<button onclick="ledOff()">off</button>
+</p>
+</div>
+
+<div style="display: inline-block; border:solid black 1pt; vertical-align:middle;">
+<!--
+This section displays the emergency stop button.
+-->
+<svg height="80" width="80" style="vertical-align:bottom;">
+	<rect x="0" y="0" width="80" height="80"
+	      fill="orange" stroke="grey" stroke-width="1"/>
+	<circle cx="40" cy="40" r="30"
+	        fill="red" stroke="white" stroke-width="2"
+	        onclick="ledOff()"/>
+	<circle cx="40" cy="40" r="25"
+	        fill="none" stroke="white" stroke-width="2"/>
+	<text x="40" y="40" font-family="Sans-Serif" font-size="14"
+	      text-anchor="middle" dominant-baseline="middle" onclick="emergency()">
+	  STOP
+	</text>
+</svg>
+</div>
+
+<div style="display: inline-block; vertical-align:middle;">
+<!--
+This section displays the status of the connection.
+-->
+<svg height="80" width="100" style="vertical-align:bottom;">
+	<circle id="connection" cx="50" cy="30" r="20"
+	        fill="orange" stroke="white" stroke-width="2"/>
+	<text id="connstatus" x="50" y="60" font-family="Sans-Serif" font-size="14"
+	      text-anchor="middle" dominant-baseline="middle">
+	  Not connected
+	</text>
+</svg>
+</div>
+
+<br/>
+
+<div style="display: inline-block; vertical-align:middle;">
+<!--
+This section displays a representation of the chassis.
+-->
+<svg height="200" width="200" style="vertical-align:bottom;">
+	<circle cx="100" cy="100" r="90"
+	        fill="black" stroke="none"/>
+	<rect x="5" y="50" width="10" height="100"
+	      fill="grey" stroke="white" stroke-width="1"/>
+	<rect x="185" y="50" width="10" height="100"
+	      fill="grey" stroke="white" stroke-width="1"/>
+	<circle cx="100" cy="160" r="20"
+	        fill="grey" stroke="white" stroke-width="1"/>
+	<foreignObject x="30" y="80" width="60" height="16" dominant-baseline="middle">
+		<span id="leftA" style="font-family:Sans-Serif; font-size: 11pt; background-color: white; display: inline-block; width:45pt; text-align: right">
+			0
+		</span>
+	</foreignObject>
+	<foreignObject x="30" y="100" width="60" height="16" dominant-baseline="middle">
+		<span id="leftSpd" style="font-family:Sans-Serif; font-size: 11pt; background-color: white; display: inline-block; width:45pt; text-align: right">
+			0
+		</span>
+	</foreignObject>
+
+	<foreignObject x="110" y="80" width="60" height="16" dominant-baseline="middle">
+		<span id="rightA" style="font-family:Sans-Serif; font-size: 11pt; background-color: white; display: inline-block; width:45pt; text-align: left">
+			0
+		</span>
+	</foreignObject>
+	<foreignObject x="110" y="100" width="60" height="16" text-anchor="middle" dominant-baseline="middle">
+		<span id="rightSpd" style="font-family:Sans-Serif; font-size: 11pt; background-color: white; display: inline-block; width:45pt; text-align: left">
+			0
+		</span>
+	</foreignObject>
+</svg>
+</div>
+
+<div style="display: inline-block; vertical-align:middle; font-family: Sans-Serif; font-size: 10pt; padding-left: 10pt;">
+<!--
+This section displays the controls of the chassis.
+-->
+  L:<input type="text" id="leftAdvance" size="10"/> R:<input type="text" id="rightAdvance" size="10"/>
+  <button onclick="advance()">Move</button>
+  <br/>
+  L:<input type="text" id="leftCruise" size="10"/> R:<input type="text" id="rightCruise" size="10"/>
+  <button onclick="cruise()">Cruise</button>
+  <br/>
+  <button onclick="stop()">Stop</button>
+</div>
+</body>
+
+</html>
