@@ -2,6 +2,13 @@ Driver for a Pololu Romi chassis
 ================================
 This is [MicroPython](http://micropython.org) code for driving a [Pololu Romi Chassis](https://www.pololu.com/category/202/romi-chassis-and-accessories) equipped with the [Motor driver and power distribution board](https://www.pololu.com/product/3543).
 
+The exact list of components I used is:
+* a [Romi chassis](https://www.pololu.com/product/3500),
+* a [pair of Hall effect encoders](https://www.pololu.com/product/3542) for the motors,
+* a matching [power and motor control board](https://www.pololu.com/product/3543),
+* two [extension plates](https://www.pololu.com/product/3560) to put extra devices on the chassis.
+* a [pyboard](https://store.micropython.org/product/PYBv1.1H) or an [ESP32](https://www.espressif.com/en/products/socs/esp32/overview)
+
 There is a version for the Pyboard in module romipyb.py, and a version for the ESP32 in module romiesp32.py.
 
 I experimented with several options to control the chassis remotely through WiFi:
